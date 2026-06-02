@@ -187,9 +187,9 @@ def plot_mlambda_curves(pred_df, figure_dir):
     plt.close()
 
 def plot_calibration(pred_df, figure_dir):
-    """Plots PIT histograms and Empirical Coverage curves for uncertainty diagnostics."""
+    """Plots PIT histograms and Empirical Coverage curves for uncertainty diagnostics (globally and binned by mass)."""
     print("  Plotting calibration diagnostics...")
-    fig, axes = plt.subplots(1, 2, figsize=(12, 5))
+    fig, axes = plt.subplots(1, 3, figsize=(18, 5))
     
     # 1. PIT Histogram for R
     # PIT = norm.cdf((True_R - BNN_R_mean) / BNN_R_std)
@@ -205,7 +205,7 @@ def plot_calibration(pred_df, figure_dir):
     ax0.set_title("Stellar Radius PIT Calibration Histogram")
     ax0.legend(loc="upper right")
     
-    # 2. Empirical Coverage Curve
+    # 2. Empirical Coverage Curve (Global)
     # Loop over expected coverages from 5% to 95%
     ax1 = axes[1]
     expected_coverages = np.linspace(0.05, 0.95, 19)
@@ -235,8 +235,41 @@ def plot_calibration(pred_df, figure_dir):
     
     ax1.set_xlabel("Expected Confidence Interval Level")
     ax1.set_ylabel("Actual Empirical Coverage")
-    ax1.set_title("Confidence Interval Calibration Curve")
+    ax1.set_title("Global Calibration Curve")
     ax1.legend(loc="upper left")
+    
+    # 3. Mass-Binned Calibration Curve (for Radius R)
+    # Splitting into Low-Mass (< 1.3 M_sun), Mid-Mass (1.3 - 1.7 M_sun), and High-Mass (> 1.7 M_sun)
+    ax2 = axes[2]
+    ax2.plot(expected_coverages, expected_coverages, color="red", linestyle="--", linewidth=1.5, label="Perfect Calibration")
+    
+    bin_low = pred_df[pred_df["M"] < 1.3]
+    bin_mid = pred_df[(pred_df["M"] >= 1.3) & (pred_df["M"] <= 1.7)]
+    bin_high = pred_df[pred_df["M"] > 1.7]
+    
+    bins = [
+        (bin_low, "Low-Mass ($M < 1.3 M_\\odot$)", "#2ca02c", "o"),
+        (bin_mid, "Mid-Mass ($1.3 \\leq M \\leq 1.7 M_\\odot$)", "#1f77b4", "s"),
+        (bin_high, "High-Mass ($M > 1.7 M_\\odot$)", "#9467bd", "^")
+    ]
+    
+    for df_bin, label_bin, color_bin, marker_bin in bins:
+        if not df_bin.empty:
+            errors_bin = df_bin["R"] - df_bin["bnn_R"]
+            stds_bin = df_bin["bnn_R_std"]
+            z_scores_bin = np.abs(errors_bin / (stds_bin + 1e-10))
+            
+            act_coverages_bin = []
+            for exp_cov in expected_coverages:
+                z_thresh = norm.ppf(0.5 + exp_cov / 2.0)
+                act_coverages_bin.append(np.mean(z_scores_bin <= z_thresh))
+                
+            ax2.plot(expected_coverages, act_coverages_bin, color=color_bin, marker=marker_bin, linewidth=1.8, label=label_bin)
+            
+    ax2.set_xlabel("Expected Confidence Interval Level")
+    ax2.set_ylabel("Actual Empirical Coverage")
+    ax2.set_title("Mass-Dependent Calibration for Radius $R$")
+    ax2.legend(loc="upper left")
     
     plt.tight_layout()
     plt.savefig(os.path.join(figure_dir, "03_uncertainty_calibration.png"), dpi=300)
@@ -360,6 +393,42 @@ def plot_performance_summary(metrics_path, figure_dir):
     plt.savefig(os.path.join(figure_dir, "05_speed_accuracy_benchmark.png"), dpi=300)
     plt.close()
 
+def plot_uncertainty_breakdown(pred_df, figure_dir):
+    """
+    Plots the decoupled uncertainty components (aleatoric vs epistemic standard deviation)
+    predicted by the deep BNN ensemble as a function of stellar mass.
+    """
+    print("  Plotting decoupled uncertainty components...")
+    sub_df = pred_df.sort_values(by="M")
+    
+    fig, axes = plt.subplots(1, 2, figsize=(12, 5.5))
+    
+    # Panel 1: Radius uncertainty breakdown
+    ax0 = axes[0]
+    ax0.plot(sub_df["M"], sub_df["bnn_R_std"], color="black", linestyle="-", linewidth=2.0, label="Total Predictive $\\sigma_R$")
+    ax0.plot(sub_df["M"], sub_df["bnn_R_std_aleatoric"], color="#e31a1c", linestyle="--", linewidth=1.8, label="Aleatoric $\\sigma_R$ (Obs. Noise)")
+    ax0.plot(sub_df["M"], sub_df["bnn_R_std_epistemic"], color="#1f78b4", linestyle=":", linewidth=2.0, label="Epistemic $\\sigma_R$ (Model)")
+    
+    ax0.set_xlabel("Stellar Mass $M$ ($M_\\odot$)")
+    ax0.set_ylabel("Radius Uncertainty $\\sigma_R$ (km)")
+    ax0.set_title("Stellar Radius Uncertainty Breakdown")
+    ax0.legend(loc="upper right")
+    
+    # Panel 2: Lambda uncertainty breakdown
+    ax1 = axes[1]
+    ax1.plot(sub_df["M"], sub_df["bnn_log10_Lambda_std"], color="black", linestyle="-", linewidth=2.0, label="Total Predictive $\\sigma_{\\log\\Lambda}$")
+    ax1.plot(sub_df["M"], sub_df["bnn_log10_Lambda_std_aleatoric"], color="#e31a1c", linestyle="--", linewidth=1.8, label="Aleatoric $\\sigma_{\\log\\Lambda}$ (Obs. Noise)")
+    ax1.plot(sub_df["M"], sub_df["bnn_log10_Lambda_std_epistemic"], color="#1f78b4", linestyle=":", linewidth=2.0, label="Epistemic $\\sigma_{\\log\\Lambda}$ (Model)")
+    
+    ax1.set_xlabel("Stellar Mass $M$ ($M_\\odot$)")
+    ax1.set_ylabel("$\\log_{10}\\Lambda$ Uncertainty $\\sigma_{\\log\\Lambda}$")
+    ax1.set_title("Tidal Deformability Uncertainty Breakdown")
+    ax1.legend(loc="upper right")
+    
+    plt.tight_layout()
+    plt.savefig(os.path.join(figure_dir, "06_uncertainty_breakdown.png"), dpi=300)
+    plt.close()
+
 def generate_all_plots(prediction_csv="data/metrics/test_predictions.csv",
                        metrics_json="data/metrics/model_comparison.json",
                        figure_dir="outputs/figures", mode="mock"):
@@ -378,6 +447,7 @@ def generate_all_plots(prediction_csv="data/metrics/test_predictions.csv",
     plot_calibration(pred_df, figure_dir)
     plot_observational_posteriors(figure_dir, mode=mode)
     plot_performance_summary(metrics_json, figure_dir)
+    plot_uncertainty_breakdown(pred_df, figure_dir)
     
     print(f"Plotting suite completed successfully. All figures saved to {figure_dir}/")
 
