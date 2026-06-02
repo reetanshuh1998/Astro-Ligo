@@ -1,0 +1,31 @@
+[build-system]
+requires = ["setuptools>=61.0.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "ns_infer"
+version = "0.1.0"
+description = "Neutron Star Parameter Estimation and Equation of State Machine Learning Inference"
+readme = "README.md"
+authors = [
+    { name = "Priyanshi", email = "priyanshi@example.com" }
+]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Topic :: Scientific/Engineering :: Physics",
+]
+dependencies = [
+    "numpy>=1.24.0",
+    "scipy>=1.10.0",
+    "pandas>=2.0.0",
+    "matplotlib>=3.7.0",
+    "xgboost>=1.7.0",
+    "scikit-learn>=1.2.0",
+    "torch>=2.0.0",
+]
+requires-python = ">=3.10"
+
+[tool.setuptools.packages.find]
+where = ["src"]
